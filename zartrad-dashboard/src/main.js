@@ -1,42 +1,88 @@
 import './style.css';
-import { loadSnapshotData } from './dataLoader.js';
-import { fetchContractMessage } from './contract.js'; // stubbed
+import { JsonRpcProvider, Contract } from "ethers";
 
 async function renderSnapshot() {
-  let data;
+  const app = document.querySelector('#app');
+  app.innerHTML = "<h1>Zartrad Dashboard</h1><p>Loading...</p>";
+
+  let cid, timestamp, data;
+
   try {
-    data = await loadSnapshotData();
+    const provider = new JsonRpcProvider("https://rpc-amoy.polygon.technology");
+    const contract = new Contract(
+      "0xfB3B6b718F9D6793719AEa05Bcd2aAd9A29F8677",
+      [
+        {
+          "inputs": [],
+          "name": "getLatestCID",
+          "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "getSnapshotCount",
+          "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [{ "internalType": "uint256", "name": "index", "type": "uint256" }],
+          "name": "getSnapshot",
+          "outputs": [
+            { "internalType": "string", "name": "cid", "type": "string" },
+            { "internalType": "uint256", "name": "timestamp", "type": "uint256" }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        }
+      ],
+      provider
+    );
+
+    const count = await contract.getSnapshotCount();
+    const index = Number(count) - 1;
+    const latest = await contract.getSnapshot(index);
+    cid = latest.cid;
+    timestamp = new Date(Number(latest.timestamp) * 1000).toLocaleString();
+    
+    const res = await fetch(`https://w3s.link/ipfs/${cid}/snapshot_2025-08-06_16-39-03.json`);
+    data = await res.json();
+
   } catch (err) {
-    console.error("Failed to load snapshot data:", err);
+    app.innerHTML = `<h1>Zartrad Dashboard</h1><p style="color:red;">Error: ${err.message}</p>`;
+    console.error(err);
     return;
   }
 
-  const app = document.querySelector('#app');
-
-  // Load account info from data
   const account = data["U21262439"] || {};
   const pnl = data["All"] || {};
   const positions = data["Positions"] || [];
 
   app.innerHTML = `
     <h1>Zartrad Dashboard</h1>
-    <section>
-      <h2>Snapshot Source</h2>
-      <p><b>IPFS CID:</b> bafybeihxgmwyofkso7h2fos6wpq5ncg4jkcuuydqmky6sjbvbek74svqb4</p>
-      <p><a href="https://w3s.link/ipfs/bafybeihxgmwyofkso7h2fos6wpq5ncg4jkcuuydqmky6sjbvbek74svqb4/snapshot_2025-08-06_16-39-03.json" target="_blank">Open JSON Snapshot</a></p>
+    
+    <section style="border: 2px solid #666; padding: 20px; margin-bottom: 20px;">
+      <h2>Snapshot Source <span style="color:limegreen;">(Verified ✅)</span></h2>
+      <p><b>IPFS CID (on-chain):</b> ${cid}</p>
+      <p><b>Timestamp (on-chain):</b> ${timestamp}</p>
+      <p>
+        🔗 <a href="https://w3s.link/ipfs/${cid}/snapshot_2025-08-06_16-39-03.json" target="_blank">Open JSON Snapshot</a><br>
+        🧠 <a href="https://amoy.polygonscan.com/address/0xfB3B6b718F9D6793719AEa05Bcd2aAd9A29F8677#readContract" target="_blank">View Smart Contract on Polygonscan</a>
+      </p>
     </section>
 
     <section>
       <h2>Account</h2>
-      <p><b>Buying Power:</b> ${account.BuyingPower}</p>
-      <p><b>Net Liquidation:</b> ${account.NetLiquidation}</p>
-      <p><b>Total Cash Value:</b> ${account.TotalCashValue}</p>
+      <p><b>Buying Power:</b> ${account.BuyingPower} USD</p>
+      <p><b>Net Liquidation:</b> ${account.NetLiquidation} USD</p>
+      <p><b>Total Cash Value:</b> ${account.TotalCashValue} USD</p>
     </section>
 
     <section>
       <h2>PnL</h2>
-      <p><b>Unrealized:</b> ${pnl.UnrealizedPnL}</p>
-      <p><b>Realized:</b> ${pnl.RealizedPnL}</p>
+      <p><b>Unrealized:</b> ${pnl.UnrealizedPnL} BASE</p>
+      <p><b>Realized:</b> ${pnl.RealizedPnL} BASE</p>
     </section>
 
     <section>
