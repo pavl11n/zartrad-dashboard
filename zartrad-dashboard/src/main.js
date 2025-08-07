@@ -45,7 +45,7 @@ async function renderSnapshot() {
     const latest = await contract.getSnapshot(index);
     cid = latest.cid;
     timestamp = new Date(Number(latest.timestamp) * 1000).toLocaleString();
-    
+
     const res = await fetch(`https://w3s.link/ipfs/${cid}/snapshot_2025-08-06_16-39-03.json`);
     data = await res.json();
 
@@ -74,15 +74,15 @@ async function renderSnapshot() {
 
     <section>
       <h2>Account</h2>
-      <p><b>Buying Power:</b> ${account.BuyingPower} USD</p>
-      <p><b>Net Liquidation:</b> ${account.NetLiquidation} USD</p>
-      <p><b>Total Cash Value:</b> ${account.TotalCashValue} USD</p>
+      <p><b>Buying Power:</b> ${account.BuyingPower}</p>
+      <p><b>Net Liquidation:</b> ${account.NetLiquidation}</p>
+      <p><b>Total Cash Value:</b> ${account.TotalCashValue}</p>
     </section>
 
     <section>
       <h2>PnL</h2>
-      <p><b>Unrealized:</b> ${pnl.UnrealizedPnL} BASE</p>
-      <p><b>Realized:</b> ${pnl.RealizedPnL} BASE</p>
+      <p><b>Unrealized:</b> ${pnl.UnrealizedPnL}</p>
+      <p><b>Realized:</b> ${pnl.RealizedPnL}</p>
     </section>
 
     <section>
