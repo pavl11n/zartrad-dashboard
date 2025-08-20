@@ -1,26 +1,62 @@
+// src/contract.js
 import { JsonRpcProvider, Contract } from "ethers";
 
-const contractAddress = "0xfB3B6b718F9D6793719AEa05Bcd2aAd9A29F8677";
+const RPC = import.meta.env.VITE_RPC_URL;
+const ADDRESS = import.meta.env.VITE_REGISTRY_ADDR;
 
-const abi = [
+const ABI = [
   {
-    "inputs": [{ "internalType": "string", "name": "_cid", "type": "string" }],
-    "name": "uploadCID",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
+    inputs: [],
+    name: "getSnapshotCount",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function"
   },
   {
-    "inputs": [],
-    "name": "getLatestCID",
-    "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
-    "stateMutability": "view",
-    "type": "function"
+    inputs: [{ internalType: "uint256", name: "index", type: "uint256" }],
+    name: "getSnapshot",
+    outputs: [
+      { internalType: "string",  name: "cid",        type: "string"  },
+      { internalType: "bytes32", name: "sha256File", type: "bytes32" },
+      { internalType: "uint256", name: "timestamp",  type: "uint256" }
+    ],
+    stateMutability: "view",
+    type: "function"
+  },
+  {
+    inputs: [],
+    name: "getLatest",
+    outputs: [
+      { internalType: "string",  name: "cid",        type: "string"  },
+      { internalType: "bytes32", name: "sha256File", type: "bytes32" },
+      { internalType: "uint256", name: "timestamp",  type: "uint256" }
+    ],
+    stateMutability: "view",
+    type: "function"
   }
 ];
 
-export async function fetchLatestCID() {
-  const provider = new JsonRpcProvider("https://rpc-amoy.polygon.technology");
-  const contract = new Contract(contractAddress, abi, provider);
-  return await contract.getLatestCID();
+const provider = new JsonRpcProvider(RPC);
+const contract = new Contract(ADDRESS, ABI, provider);
+
+// Latest snapshot (cid, sha256File, timestamp-ms)
+export async function getLatestOnChain() {
+  const count = await contract.getSnapshotCount();
+  if (count === 0n) return { cid: null, sha256File: null, timestamp: null };
+  const { cid, sha256File, timestamp } = await contract.getLatest();
+  return {
+    cid,
+    sha256File: String(sha256File).toLowerCase(), // bytes32 -> 0x… string
+    timestamp: Number(timestamp) * 1000           // ms for Date()
+  };
+}
+
+// Optional: read by index
+export async function getSnapshotByIndex(index) {
+  const { cid, sha256File, timestamp } = await contract.getSnapshot(BigInt(index));
+  return {
+    cid,
+    sha256File: String(sha256File).toLowerCase(),
+    timestamp: Number(timestamp) * 1000
+  };
 }

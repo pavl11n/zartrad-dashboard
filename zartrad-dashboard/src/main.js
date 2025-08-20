@@ -1,106 +1,126 @@
+// src/main.js
 import './style.css';
-import { JsonRpcProvider, Contract } from "ethers";
+import { fetchAndVerifyByCID } from "./dataLoader.js";
+import { getLatestOnChain } from './contract.js';
+
+const fmtUsd = (s) => {
+  if (s == null) return "—";
+  const n = Number(s);
+  return isFinite(n)
+    ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(n)
+    : s;
+};
+const fmtPct = (s) => (s == null ? "—" : `${s}%`);
+const symOpt = (p) => `${p.symbol} ${p.expiry} ${p.strike} ${p.right?.[0] ?? ""}`.trim();
+
+function kpiRow(payload) {
+  const all = payload.accounts["All"] || {};
+  // Mask the exact account id; show as Account 1
+  const acct = payload.accounts["U21262000"] || {}; // your current single account
+  const cells = [
+    { label: "Net Liquidation (Account 1)", v: fmtUsd(acct?.NetLiquidation?.value) },
+    { label: "Total Cash (Account 1)",      v: fmtUsd(acct?.TotalCashValue?.value) },
+    { label: "Buying Power (Account 1)",    v: fmtUsd(acct?.BuyingPower?.value) },
+    { label: "Unrealized PnL (All)",        v: fmtUsd(all?.UnrealizedPnL?.value) },
+    { label: "Realized PnL (All)",          v: fmtUsd(all?.RealizedPnL?.value) },
+  ];
+  return `
+    <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:12px 0 20px;">
+      ${cells.map(c => `
+        <div style="background:#111;border:1px solid #333;border-radius:10px;padding:12px;">
+          <div style="font-size:12px;color:#aaa;margin-bottom:6px;">${c.label}</div>
+          <div style="font-size:18px;font-weight:700;">${c.v}</div>
+        </div>`).join("")}
+    </div>`;
+}
+
+function positionsTable(positions, baseCCY) {
+  if (!Array.isArray(positions) || positions.length === 0) {
+    return `<div style="color:#aaa;">No open positions</div>`;
+  }
+  const rows = positions.map(p => `
+    <tr>
+      <td>${p.secType === "OPT" ? symOpt(p) : p.symbol}</td>
+      <td>${p.secType}</td>
+      <td style="text-align:right;">${p.position}</td>
+      <td style="text-align:right;">${p.avgPrice ?? "—"}</td>
+      <td style="text-align:right;">${p.lastPrice ?? "—"}</td>
+      <td style="text-align:right;">${fmtPct(p.pctChange)}</td>
+      <td style="text-align:right;">${fmtUsd(p.unrealizedPnL)} ${baseCCY || ""}</td>
+    </tr>
+  `).join("");
+  return `
+  <div style="overflow:auto;">
+    <table style="width:100%;border-collapse:collapse;">
+      <thead>
+        <tr style="text-align:left;border-bottom:1px solid #333;">
+          <th>Symbol</th><th>Type</th><th style="text-align:right;">Qty</th>
+          <th style="text-align:right;">Avg</th><th style="text-align:right;">Last</th>
+          <th style="text-align:right;">% Chg</th><th style="text-align:right;">U/PnL</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
 
 async function renderSnapshot() {
   const app = document.querySelector('#app');
-  app.innerHTML = "<h1>Zartrad Dashboard</h1><p>Loading...</p>";
-
-  let cid, timestamp, data;
+  app.innerHTML = "<h1>Zartrad Dashboard</h1><p>Loading…</p>";
 
   try {
-    const provider = new JsonRpcProvider("https://rpc-amoy.polygon.technology");
-    const contract = new Contract(
-      "0xfB3B6b718F9D6793719AEa05Bcd2aAd9A29F8677",
-      [
-        {
-          "inputs": [],
-          "name": "getLatestCID",
-          "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
-          "stateMutability": "view",
-          "type": "function"
-        },
-        {
-          "inputs": [],
-          "name": "getSnapshotCount",
-          "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-          "stateMutability": "view",
-          "type": "function"
-        },
-        {
-          "inputs": [{ "internalType": "uint256", "name": "index", "type": "uint256" }],
-          "name": "getSnapshot",
-          "outputs": [
-            { "internalType": "string", "name": "cid", "type": "string" },
-            { "internalType": "uint256", "name": "timestamp", "type": "uint256" }
-          ],
-          "stateMutability": "view",
-          "type": "function"
-        }
-      ],
-      provider
-    );
+    const { cid, sha256File, timestamp } = await getLatestOnChain();
+    if (!cid) { app.innerHTML = "<h1>Zartrad Dashboard</h1><p>No snapshots on-chain yet.</p>"; return; }
 
-    const count = await contract.getSnapshotCount();
-    const index = Number(count) - 1;
-    const latest = await contract.getSnapshot(index);
-    cid = latest.cid;
-    timestamp = new Date(Number(latest.timestamp) * 1000).toLocaleString();
+    const tsOnChain = timestamp ? new Date(timestamp).toLocaleString() : "n/a";
+    const v = await fetchAndVerifyByCID(cid, sha256File);
+    const verified = v.ok && !!v.sha256_onchain;
 
-    const res = await fetch(`https://w3s.link/ipfs/${cid}/snapshot_2025-08-06_16-39-03.json`);
-    data = await res.json();
+    const asOf = v.json?.as_of_utc ?? "n/a";
+    const payload = v.json?.payload || {};
+    const base = v.json?.account_base_ccy || v.json?.meta?.currency || "USD";
+    const polyscanAddr = `https://amoy.polygonscan.com/address/${import.meta.env.VITE_REGISTRY_ADDR}`;
 
-  } catch (err) {
-    app.innerHTML = `<h1>Zartrad Dashboard</h1><p style="color:red;">Error: ${err.message}</p>`;
-    console.error(err);
-    return;
-  }
+    app.innerHTML = `
+      <h1 style="margin-bottom:14px;">Zartrad Dashboard</h1>
 
-  const account = data["U21262439"] || {};
-  const pnl = data["All"] || {};
-  const positions = data["Positions"] || [];
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+        <span style="padding:6px 10px;border-radius:999px;font-weight:700;
+                     ${verified ? 'background:#0a2; color:#fff;' : 'background:#642; color:#fff;'}">
+          ${verified ? 'Verified' : 'Unverified'}
+        </span>
+        <span style="color:#bbb;">as_of_utc: ${asOf}</span>
+        <span style="margin-left:auto;">
+          <a href="${v.url}" target="_blank">IPFS</a> ·
+          <a href="${polyscanAddr}#transactions" target="_blank">Polygonscan</a>
+        </span>
+      </div>
 
-  app.innerHTML = `
-    <h1>Zartrad Dashboard</h1>
-    
-    <section style="border: 2px solid #666; padding: 20px; margin-bottom: 20px;">
-      <h2>Snapshot Source <span style="color:limegreen;">(Verified ✅)</span></h2>
-      <p><b>IPFS CID (on-chain):</b> ${cid}</p>
-      <p><b>Timestamp (on-chain):</b> ${timestamp}</p>
-      <p>
-        🔗 <a href="https://w3s.link/ipfs/${cid}/snapshot_2025-08-06_16-39-03.json" target="_blank">Open JSON Snapshot</a><br>
-        🧠 <a href="https://amoy.polygonscan.com/address/0xfB3B6b718F9D6793719AEa05Bcd2aAd9A29F8677#readContract" target="_blank">View Smart Contract on Polygonscan</a>
-      </p>
-    </section>
+      ${kpiRow(payload)}
 
-    <section>
-      <h2>Account</h2>
-      <p><b>Buying Power:</b> ${account.BuyingPower}</p>
-      <p><b>Net Liquidation:</b> ${account.NetLiquidation}</p>
-      <p><b>Total Cash Value:</b> ${account.TotalCashValue}</p>
-    </section>
+      <h2 style="margin:10px 0;">Positions</h2>
+      ${positionsTable(payload.positions || [], base)}
 
-    <section>
-      <h2>PnL</h2>
-      <p><b>Unrealized:</b> ${pnl.UnrealizedPnL}</p>
-      <p><b>Realized:</b> ${pnl.RealizedPnL}</p>
-    </section>
-
-    <section>
-      <h2>Positions</h2>
-      ${positions.map(pos => `
-        <div style="margin-bottom: 20px;">
-          <h3>${pos.Instrument}</h3>
-          <p><b>Symbol:</b> ${pos.Symbol}</p>
-          <p><b>SecType:</b> ${pos.SecType}</p>
-          <p><b>Position:</b> ${pos.Position}</p>
-          <p><b>AvgPrice:</b> ${pos.AvgPrice}</p>
-          <p><b>LastPrice:</b> ${pos.LastPrice}</p>
-          <p><b>PctChange:</b> ${pos.PctChange}</p>
-          <p><b>PnL $:</b> ${pos["PnL_$"]}</p>
+      <details style="margin-top:18px;">
+        <summary>Tech verification details</summary>
+        <div style="margin-top:10px;font-size:13px;color:#bbb;">
+          <div><b>On-chain CID:</b> <code style="word-break:break-all;">${cid}</code></div>
+          <div><b>On-chain ts:</b> ${tsOnChain}</div>
+          <div style="margin-top:8px;"><b>Hashes</b></div>
+          <ul>
+            <li><b>Expected (on-chain):</b> <code>${v.sha256_onchain ?? 'n/a'}</code></li>
+            <li><b>Computed file-bytes:</b> <code>${v.sha256_file}</code></li>
+            <li><b>Computed canonical (no sha256):</b> <code>${v.sha256_canonical}</code></li>
+            ${v.sha256_expected ? `<li><b>Expected (in-file):</b> <code>${v.sha256_expected}</code></li>` : ""}
+            <li><b>Mode:</b> ${v.mode || 'n/a'}</li>
+          </ul>
         </div>
-      `).join("")}
-    </section>
-  `;
+      </details>
+    `;
+  } catch (err) {
+    console.error(err);
+    app.innerHTML = `<h1>Zartrad Dashboard</h1><p style="color:#f55;">${err.message}</p>`;
+  }
 }
 
 renderSnapshot();
