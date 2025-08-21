@@ -13,10 +13,7 @@ const fmtUsd = (s) => {
 const fmtPct = (s) => (s == null ? "—" : `${s}%`);
 const symOpt = (p) => `${p.symbol} ${p.expiry} ${p.strike} ${p.right?.[0] ?? ""}`.trim();
 
-function kpiRow(payload) {
-  const all = payload.accounts["All"] || {};
-  // Mask the exact account id; show as Account 1
-  const acct = payload.accounts["U21262000"] || {}; // your current single account
+function kpiRow(acct, all) {
   const cells = [
     { label: "Net Liquidation (Account 1)", v: fmtUsd(acct?.NetLiquidation?.value) },
     { label: "Total Cash (Account 1)",      v: fmtUsd(acct?.TotalCashValue?.value) },
@@ -64,6 +61,24 @@ function positionsTable(positions, baseCCY) {
   </div>`;
 }
 
+function nyTradingDay(isoUtc) {
+  if (!isoUtc || isoUtc === "n/a") return "n/a";
+  const d = new Date(isoUtc);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric", month: "2-digit", day: "2-digit"
+  }).format(d); // YYYY-MM-DD
+}
+
+function nyTimestamp(isoUtc) {
+  if (!isoUtc || isoUtc === "n/a") return "n/a";
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit"
+  }).format(new Date(isoUtc));
+}
+
 async function renderSnapshot() {
   const app = document.querySelector('#app');
   app.innerHTML = "<h1>Zartrad Dashboard</h1><p>Loading…</p>";
@@ -77,7 +92,13 @@ async function renderSnapshot() {
     const verified = v.ok && !!v.sha256_onchain;
 
     const asOf = v.json?.as_of_utc ?? "n/a";
+    const asOfNY   = nyTimestamp(asOf);
+    const tradeDay = nyTradingDay(asOf);
     const payload = v.json?.payload || {};
+    const accounts = payload.accounts || {};
+    const acctKey  = Object.keys(accounts).find(k => k !== "All") || null;
+    const acct     = acctKey ? accounts[acctKey] : {};
+    const all      = accounts["All"] || {};
     const base = v.json?.account_base_ccy || v.json?.meta?.currency || "USD";
     const polyscanAddr = `https://amoy.polygonscan.com/address/${import.meta.env.VITE_REGISTRY_ADDR}`;
 
@@ -89,14 +110,14 @@ async function renderSnapshot() {
                      ${verified ? 'background:#0a2; color:#fff;' : 'background:#642; color:#fff;'}">
           ${verified ? 'Verified' : 'Unverified'}
         </span>
-        <span style="color:#bbb;">as_of_utc: ${asOf}</span>
+        <span style="color:#bbb;">UTC: ${asOf} · NY: ${asOfNY} (Trading day: ${tradeDay})</span>
         <span style="margin-left:auto;">
           <a href="${v.url}" target="_blank">IPFS</a> ·
           <a href="${polyscanAddr}#transactions" target="_blank">Polygonscan</a>
         </span>
       </div>
 
-      ${kpiRow(payload)}
+      ${kpiRow(acct, all)}
 
       <h2 style="margin:10px 0;">Positions</h2>
       ${positionsTable(payload.positions || [], base)}
