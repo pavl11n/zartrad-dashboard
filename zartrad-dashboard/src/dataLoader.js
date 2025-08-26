@@ -2,7 +2,7 @@
 // Fetch snapshot by file CID *or* "rootCID/filename" path and verify SHA-256.
 // If expectedHex (on-chain bytes32) is provided, verify against that first.
 
-async function fetchWithTimeout(url, ms = 8000) {
+async function fetchWithTimeout(url, ms = 15000) {
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), ms);
   try {
@@ -50,7 +50,7 @@ export async function fetchAndVerifyByCID(pointer, expectedHex) {
   let lastErr;
   for (const url of gateways) {
     try {
-      const res = await fetchWithTimeout(url, 8000);
+      const res = await fetchWithTimeout(url, 15000);
       if (!res.ok) { lastErr = new Error(`${url} -> ${res.status}`); continue; }
 
       const bytes = new Uint8Array(await res.arrayBuffer());

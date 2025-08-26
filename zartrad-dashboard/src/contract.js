@@ -51,7 +51,7 @@ export async function getLatestOnChain() {
   };
 }
 
-// Optional: read by index
+// Read by index
 export async function getSnapshotByIndex(index) {
   const { cid, sha256File, timestamp } = await contract.getSnapshot(BigInt(index));
   return {
@@ -59,4 +59,10 @@ export async function getSnapshotByIndex(index) {
     sha256File: String(sha256File).toLowerCase(),
     timestamp: Number(timestamp) * 1000
   };
+}
+
+// Snapshot count
+export async function getSnapshotCount() {
+  const n = await contract.getSnapshotCount();
+  return Number(n);
 }

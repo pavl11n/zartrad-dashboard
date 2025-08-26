@@ -1,11 +1,11 @@
 // src/main.js
 import './style.css';
 import { fetchAndVerifyByCID } from "./dataLoader.js";
-import { getLatestOnChain } from './contract.js';
+import { getLatestOnChain, getSnapshotCount } from './contract.js';
+import { fetchAllSnapshots, buildEquitySeries, computePerformance } from "./history.js";
 
 // ---------- THEME ----------
 const THEME_KEY = 'theme';
-
 function getInitialTheme() {
   const saved = localStorage.getItem(THEME_KEY);
   if (saved === 'light' || saved === 'dark') return saved;
@@ -22,6 +22,8 @@ function toggleTheme() {
   applyTheme(theme);
 }
 // ---------- /THEME ----------
+
+let activeTab = 'overview'; // 'overview' | 'performance'
 
 const fmtUsd = (s) => {
   if (s == null) return "—";
@@ -99,7 +101,8 @@ function nyTimestamp(isoUtc) {
   }).format(new Date(isoUtc));
 }
 
-async function renderSnapshot() {
+// ---------- RENDERERS ----------
+async function renderOverview() {
   const app = document.querySelector('#app');
   app.innerHTML = "<h1>Zartrad Dashboard</h1><p>Loading…</p>";
 
@@ -123,22 +126,26 @@ async function renderSnapshot() {
     const polyscanAddr = `https://amoy.polygonscan.com/address/${import.meta.env.VITE_REGISTRY_ADDR}`;
 
     app.innerHTML = `
-      <div style="display:flex;align-items:center;gap:12px;margin:14px 0;">
-        <h1 style="margin:0;flex:0 0 auto;">Zartrad Dashboard</h1>
+      <div style="display:flex;align-items:flex-start;gap:12px;margin:14px 0;">
+        <div style="flex:1 1 auto;">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <h1 style="margin:0;">Zartrad Dashboard</h1>
+            <span class="badge" style="background:${verified ? 'var(--badge-ok-bg)' : 'var(--badge-bad-bg)'};">
+              ${verified ? 'Verified' : 'Unverified'}
+            </span>
+          </div>
+          <div style="color:var(--muted);margin-top:6px;">
+            As of ${tradeDay} Close <span style="opacity:.8">• UTC: ${asOf} • NY: ${asOfNY}</span>
+          </div>
+        </div>
 
-        <span class="badge" style="background:${verified ? 'var(--badge-ok-bg)' : 'var(--badge-bad-bg)'};">
-          ${verified ? 'Verified' : 'Unverified'}
-        </span>
-
-        <span style="color:var(--muted);">As of ${tradeDay} Close · UTC: ${asOf} · NY: ${asOfNY}</span>
-
-        <span style="margin-left:auto;display:flex;gap:12px;align-items:center;">
+        <div style="flex:0 0 auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <button id="tabOverview" ${activeTab==='overview'?'disabled':''}>Overview</button>
+          <button id="tabPerf" ${activeTab==='performance'?'disabled':''}>Performance</button>
           <a href="${v.url}" target="_blank">IPFS</a>
           <a href="${polyscanAddr}#transactions" target="_blank">Polygonscan</a>
-          <button id="themeToggle" title="Toggle theme">
-            ${theme === 'dark' ? 'Light' : 'Dark'}
-          </button>
-        </span>
+          <button id="themeToggle" title="Toggle theme">${theme === 'dark' ? 'Light' : 'Dark'}</button>
+        </div>
       </div>
 
       ${kpiRow(acct, all)}
@@ -163,16 +170,104 @@ async function renderSnapshot() {
       </details>
     `;
 
-    const btn = document.getElementById('themeToggle');
-    if (btn) btn.addEventListener('click', () => {
-      toggleTheme();
-      btn.textContent = theme === 'dark' ? 'Light' : 'Dark';
-    });
-
+    wireHeaderEvents();
   } catch (err) {
     console.error(err);
     app.innerHTML = `<h1>Zartrad Dashboard</h1><p style="color:#f55;">${err.message}</p>`;
   }
 }
 
-renderSnapshot();
+async function renderPerformance() {
+  const app = document.querySelector('#app');
+  app.innerHTML = "<h1>Performance</h1><p>Loading history…</p>";
+
+  try {
+    // 1) Load history (verified when possible)
+    const snaps = await fetchAllSnapshots();
+    const loaded = snaps.length;
+
+    // 2) Try to read total snapshot count from chain (guarded)
+    let total = null;
+    try {
+      total = await getSnapshotCount();
+    } catch (e) {
+      console.warn("getSnapshotCount failed (display only):", e?.message || e);
+    }
+
+    // 3) Build equity series for charts/stats
+    const eq = buildEquitySeries(snaps);
+    const perf = computePerformance(eq); // placeholder for now
+
+    const pct = (x, dp=2) => (x == null ? "—" : (x*100).toFixed(dp) + "%");
+    const num = (x, dp=2) => (x == null ? "—" : x.toFixed(dp));
+
+    const first = eq.length ? eq[0].date : "n/a";
+    const last  = eq.length ? eq[eq.length - 1].date : "n/a";
+
+    app.innerHTML = `
+      <div style="display:flex;align-items:center;gap:12px;margin:14px 0;">
+        <h1 style="margin:0;">Performance</h1>
+        <span style="margin-left:auto;display:flex;gap:8px;align-items:center;">
+          <button id="tabOverview" ${activeTab==='overview'?'disabled':''}>Overview</button>
+          <button id="tabPerf" ${activeTab==='performance'?'disabled':''}>Performance</button>
+          <button id="themeToggle" title="Toggle theme">${theme === 'dark' ? 'Light' : 'Dark'}</button>
+        </span>
+      </div>
+
+      <p style="color:var(--muted);">
+        History range: ${first} → ${last}
+        • ${perf.stats.days ?? 0} trading days
+        ${typeof total === 'number' ? `• Loaded ${loaded}/${total} snapshots` : ``}
+      </p>
+
+      <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:12px 0 20px;">
+        ${[
+          {label:"Since Inception", v:pct(perf.stats.since_inception)},
+          {label:"YTD",             v:pct(perf.stats.ytd)},
+          {label:"Ann. Return",     v:pct(perf.stats.annual_return)},
+          {label:"Ann. Vol",        v:pct(perf.stats.annual_vol)},
+          {label:"Sharpe",          v:num(perf.stats.sharpe)}
+        ].map(c => `
+          <div style="background:var(--card-bg);border:1px solid var(--card-border);border-radius:10px;padding:12px;">
+            <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">${c.label}</div>
+            <div style="font-size:18px;font-weight:700;">${c.v}</div>
+          </div>`).join("")}
+      </div>
+
+      <pre style="text-align:left;background:var(--card-bg);border:1px solid var(--card-border);border-radius:8px;padding:12px;overflow:auto;max-height:320px;">
+    ${JSON.stringify(eq.slice(-10), null, 2)}
+      </pre>
+    `;
+
+    wireHeaderEvents();
+
+  } catch (err) {
+    console.error(err);
+    app.innerHTML = `<h1>Performance</h1><p style="color:#f55;">${err.message}</p>`;
+  }
+}
+
+function wireHeaderEvents() {
+  const t = document.getElementById('themeToggle');
+  if (t) t.addEventListener('click', () => {
+    toggleTheme();
+    t.textContent = theme === 'dark' ? 'Light' : 'Dark';
+  });
+  const o = document.getElementById('tabOverview');
+  if (o) o.addEventListener('click', async () => {
+    activeTab = 'overview';
+    await renderOverview();
+  });
+  const p = document.getElementById('tabPerf');
+  if (p) p.addEventListener('click', async () => {
+    activeTab = 'performance';
+    await renderPerformance();
+  });
+}
+
+// ---------- BOOT ----------
+if (activeTab === 'overview') {
+  renderOverview();
+} else {
+  renderPerformance();
+}
