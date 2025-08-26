@@ -1,96 +1,77 @@
+/* src/style.css — manual theme (class-based) */
+
+/* ---- Light mode defaults ---- */
 :root {
+  --bg: #ffffff;
+  --fg: #0a0a0a;
+  --muted: #666;
+  --card-bg: #f6f6f7;
+  --card-border: #ddd;
+  --table-border: #e3e3e3;
+  --badge-ok-bg: #0a2;
+  --badge-bad-bg: #642;
+  --link: #0b62ff;
+
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  /* Remove OS auto theming; we'll control theme manually */
+  /* color-scheme: light dark;  <-- delete */
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
+/* ---- Dark mode overrides ---- */
+:root.dark {
+  --bg: #0b0b0c;
+  --fg: #f2f2f2;
+  --muted: #bbb;
+  --card-bg: #111;
+  --card-border: #333;
+  --table-border: #333;
+  --badge-ok-bg: #0a2;
+  --badge-bad-bg: #642;
+  --link: #8ab4ff;
 }
 
-body {
+/* Base */
+html, body {
+  background: var(--bg);
+  color: var(--fg);
   margin: 0;
-  display: flex;
-  place-items: center;
   min-width: 320px;
   min-height: 100vh;
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
-}
-
+/* Layout */
 #app {
   max-width: 1280px;
   margin: 0 auto;
   padding: 2rem;
-  text-align: center;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.vanilla:hover {
-  filter: drop-shadow(0 0 2em #f7df1eaa);
-}
-
-.card {
-  padding: 2em;
-}
-
-.read-the-docs {
-  color: #888;
-}
+/* Links & buttons */
+a { color: var(--link); text-decoration: none; font-weight: 500; }
+a:hover { text-decoration: underline; }
 
 button {
   border-radius: 8px;
-  border: 1px solid transparent;
+  border: 1px solid var(--card-border);
   padding: 0.6em 1.2em;
   font-size: 1em;
   font-weight: 500;
   font-family: inherit;
-  background-color: #1a1a1a;
+  background-color: var(--card-bg);
+  color: var(--fg);
   cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+/* Small helpers you already use via inline styles */
+.kpi {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: 12px;
 }
+.table { width: 100%; border-collapse: collapse; }
+.thin-border { border-bottom: 1px solid var(--table-border); }
+.badge { padding: 6px 10px; border-radius: 999px; font-weight: 700; color: #fff; }

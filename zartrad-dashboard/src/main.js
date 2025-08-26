@@ -3,6 +3,26 @@ import './style.css';
 import { fetchAndVerifyByCID } from "./dataLoader.js";
 import { getLatestOnChain } from './contract.js';
 
+// ---------- THEME ----------
+const THEME_KEY = 'theme';
+
+function getInitialTheme() {
+  const saved = localStorage.getItem(THEME_KEY);
+  if (saved === 'light' || saved === 'dark') return saved;
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+function applyTheme(t) {
+  document.documentElement.classList.toggle('dark', t === 'dark');
+  localStorage.setItem(THEME_KEY, t);
+}
+let theme = getInitialTheme();
+applyTheme(theme);
+function toggleTheme() {
+  theme = theme === 'dark' ? 'light' : 'dark';
+  applyTheme(theme);
+}
+// ---------- /THEME ----------
+
 const fmtUsd = (s) => {
   if (s == null) return "—";
   const n = Number(s);
@@ -24,8 +44,8 @@ function kpiRow(acct, all) {
   return `
     <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:12px 0 20px;">
       ${cells.map(c => `
-        <div style="background:#111;border:1px solid #333;border-radius:10px;padding:12px;">
-          <div style="font-size:12px;color:#aaa;margin-bottom:6px;">${c.label}</div>
+        <div style="background:var(--card-bg);border:1px solid var(--card-border);border-radius:10px;padding:12px;">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">${c.label}</div>
           <div style="font-size:18px;font-weight:700;">${c.v}</div>
         </div>`).join("")}
     </div>`;
@@ -33,7 +53,7 @@ function kpiRow(acct, all) {
 
 function positionsTable(positions, baseCCY) {
   if (!Array.isArray(positions) || positions.length === 0) {
-    return `<div style="color:#aaa;">No open positions</div>`;
+    return `<div style="color:var(--muted);">No open positions</div>`;
   }
   const rows = positions.map(p => `
     <tr>
@@ -50,10 +70,10 @@ function positionsTable(positions, baseCCY) {
   <div style="overflow:auto;">
     <table style="width:100%;border-collapse:collapse;">
       <thead>
-        <tr style="text-align:left;border-bottom:1px solid #333;">
+        <tr style="text-align:left;border-bottom:1px solid var(--table-border);">
           <th>Symbol</th><th>Type</th><th style="text-align:right;">Qty</th>
           <th style="text-align:right;">Avg</th><th style="text-align:right;">Last</th>
-          <th style="text-align:right;">% Chg</th><th style="text-align:right;">U/PnL</th>
+          <th style="text-align:right;">% Chg</th><th style="text-align:right;">PnL</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
@@ -103,17 +123,21 @@ async function renderSnapshot() {
     const polyscanAddr = `https://amoy.polygonscan.com/address/${import.meta.env.VITE_REGISTRY_ADDR}`;
 
     app.innerHTML = `
-      <h1 style="margin-bottom:14px;">Zartrad Dashboard</h1>
+      <div style="display:flex;align-items:center;gap:12px;margin:14px 0;">
+        <h1 style="margin:0;flex:0 0 auto;">Zartrad Dashboard</h1>
 
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
-        <span style="padding:6px 10px;border-radius:999px;font-weight:700;
-                     ${verified ? 'background:#0a2; color:#fff;' : 'background:#642; color:#fff;'}">
+        <span class="badge" style="background:${verified ? 'var(--badge-ok-bg)' : 'var(--badge-bad-bg)'};">
           ${verified ? 'Verified' : 'Unverified'}
         </span>
-        <span style="color:#bbb;">UTC: ${asOf} · NY: ${asOfNY} (Trading day: ${tradeDay})</span>
-        <span style="margin-left:auto;">
-          <a href="${v.url}" target="_blank">IPFS</a> ·
+
+        <span style="color:var(--muted);">As of ${tradeDay} Close · UTC: ${asOf} · NY: ${asOfNY}</span>
+
+        <span style="margin-left:auto;display:flex;gap:12px;align-items:center;">
+          <a href="${v.url}" target="_blank">IPFS</a>
           <a href="${polyscanAddr}#transactions" target="_blank">Polygonscan</a>
+          <button id="themeToggle" title="Toggle theme">
+            ${theme === 'dark' ? 'Light' : 'Dark'}
+          </button>
         </span>
       </div>
 
@@ -124,7 +148,7 @@ async function renderSnapshot() {
 
       <details style="margin-top:18px;">
         <summary>Tech verification details</summary>
-        <div style="margin-top:10px;font-size:13px;color:#bbb;">
+        <div style="margin-top:10px;font-size:13px;color:var(--muted);">
           <div><b>On-chain CID:</b> <code style="word-break:break-all;">${cid}</code></div>
           <div><b>On-chain ts:</b> ${tsOnChain}</div>
           <div style="margin-top:8px;"><b>Hashes</b></div>
@@ -138,6 +162,13 @@ async function renderSnapshot() {
         </div>
       </details>
     `;
+
+    const btn = document.getElementById('themeToggle');
+    if (btn) btn.addEventListener('click', () => {
+      toggleTheme();
+      btn.textContent = theme === 'dark' ? 'Light' : 'Dark';
+    });
+
   } catch (err) {
     console.error(err);
     app.innerHTML = `<h1>Zartrad Dashboard</h1><p style="color:#f55;">${err.message}</p>`;
