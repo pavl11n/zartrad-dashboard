@@ -43,15 +43,20 @@ export async function fetchAllSnapshots() {
 }
 
 export function buildEquitySeries(snaps) {
-  return snaps.map((s) => {
+  const rows = snaps.map((s) => {
     const dateNY = new Intl.DateTimeFormat("en-CA", {
       timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit"
-    }).format(new Date(s.json?.as_of_utc || 0));
+    }).format(new Date(s.json?.as_of_utc || 0)); // <-- your snapshots are "prior NY close"
     const accounts = s.json?.payload?.accounts || {};
     const acctKey = Object.keys(accounts).find(k => k !== "All");
     const netliq = Number(accounts[acctKey]?.NetLiquidation?.value ?? 0);
     return { date: dateNY, equity: netliq };
   }).filter(d => d.equity > 0);
+
+  // dedupe by trading day (last snapshot for a date wins)
+  const byDate = new Map();
+  for (const r of rows) byDate.set(r.date, r);
+  return Array.from(byDate.values()).sort((a,b)=>a.date.localeCompare(b.date));
 }
 
 // --- helpers (put these just above computePerformance) ---

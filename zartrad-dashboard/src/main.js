@@ -216,8 +216,9 @@ async function renderPerformance() {
 
       <p style="color:var(--muted);">
         History range: ${first} → ${last}
-        • ${perf.stats.days ?? 0} trading days
-        ${typeof total === 'number' ? `• Loaded ${loaded}/${total} snapshots` : ``}
+        • ${eq.length} trading days
+        ${total !== null ? `• Loaded ${loaded}/${total} snapshots` : ``}
+        • As-of: prior NY close
       </p>
 
       <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:12px 0 20px;">
@@ -234,9 +235,12 @@ async function renderPerformance() {
           </div>`).join("")}
       </div>
 
-      <pre style="text-align:left;background:var(--card-bg);border:1px solid var(--card-border);border-radius:8px;padding:12px;overflow:auto;max-height:320px;">
-    ${JSON.stringify(eq.slice(-10), null, 2)}
-      </pre>
+      <details style="margin-top:12px;">
+        <summary>Equity history (Net liquidation)</summary>
+        <pre style="text-align:left;background:var(--card-bg);border:1px solid var(--card-border);border-radius:8px;padding:12px;overflow:auto;max-height:320px;">
+      ${JSON.stringify(eq.slice(-10), null, 2)}
+        </pre>
+      </details>
     `;
 
     wireHeaderEvents();
