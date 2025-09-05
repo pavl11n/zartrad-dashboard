@@ -103,3 +103,15 @@ export async function fetchAndVerifyByCID(pointer, expectedHex) {
   }
   throw lastErr ?? new Error("All IPFS gateways failed");
 }
+
+// --- New: Fetch snapshots directly from local API (SQLite) ---
+export async function fetchFromAPI() {
+  try {
+    const res = await fetch("http://127.0.0.1:8000/snapshots");
+    if (!res.ok) throw new Error(`API fetch failed: ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.error("fetchFromAPI error:", err);
+    return [];
+  }
+}

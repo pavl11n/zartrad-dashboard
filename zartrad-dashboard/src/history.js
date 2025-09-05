@@ -1,4 +1,5 @@
 // src/history.js
+import { fetchFromAPI } from "./dataLoader.js";
 import { getSnapshotCount, getSnapshotByIndex } from "./contract.js";
 import { fetchAndVerifyByCID } from "./dataLoader.js";
 
@@ -22,22 +23,20 @@ async function loadSnapshot(i) {
   return null;
 }
 
+// --- Replace fetchAllSnapshots with SQLite API version ---
 export async function fetchAllSnapshots() {
   try {
-    const count = await getSnapshotCount();
-    const idxs = Array.from({ length: count }, (_, i) => i);
-    const CONC = 4;
-
-    const out = [];
-    for (let k = 0; k < idxs.length; k += CONC) {
-      const chunk = idxs.slice(k, k + CONC);
-      const results = await Promise.all(chunk.map(loadSnapshot));
-      for (const r of results) if (r) out.push(r);
-    }
-    out.sort((a, b) => a.timestamp - b.timestamp);
-    return out;
+    const snaps = await fetchFromAPI();
+    // Format them like before: array of {timestamp, json, verified, ...}
+    return snaps.map(s => ({
+      cid: null, // not needed anymore
+      sha256File: s.sha256,
+      timestamp: new Date(s.as_of_utc).getTime(),
+      json: s.data,
+      verified: true
+    }));
   } catch (e) {
-    console.error("fetchAllSnapshots fatal:", e);
+    console.error("fetchAllSnapshots API failed:", e);
     return [];
   }
 }

@@ -1,5 +1,6 @@
 // src/main.js
 import './style.css';
+import { fetchFromAPI } from "./dataLoader.js";
 import { fetchAndVerifyByCID } from "./dataLoader.js";
 import { getLatestOnChain, getSnapshotCount } from './contract.js';
 import { fetchAllSnapshots, buildEquitySeries, computePerformance } from "./history.js";
@@ -107,22 +108,38 @@ async function renderOverview() {
   app.innerHTML = "<h1>Zartrad Dashboard</h1><p>Loading…</p>";
 
   try {
+    // Get latest hash/timestamp from chain
     const { cid, sha256File, timestamp } = await getLatestOnChain();
-    if (!cid) { app.innerHTML = "<h1>Zartrad Dashboard</h1><p>No snapshots on-chain yet.</p>"; return; }
+    if (!sha256File) {
+      app.innerHTML = "<h1>Zartrad Dashboard</h1><p>No snapshots on-chain yet.</p>";
+      return;
+    }
 
     const tsOnChain = timestamp ? new Date(timestamp).toLocaleString() : "n/a";
-    const v = await fetchAndVerifyByCID(cid, sha256File);
-    const verified = v.ok && !!v.sha256_onchain;
 
-    const asOf = v.json?.as_of_utc ?? "n/a";
+    // Fetch latest snapshot from API
+    const apiSnaps = await fetchFromAPI();
+    const latest = apiSnaps.length ? apiSnaps[apiSnaps.length - 1] : null;
+
+    let verified = false;
+    let asOf = "n/a";
+    let payload = {};
+    let base = "USD";
+
+    if (latest) {
+      asOf = latest.as_of_utc;
+      payload = latest.data?.payload || {};
+      base = latest.data?.account_base_ccy || latest.data?.meta?.currency || "USD";
+      // Verify DB hash vs on-chain hash
+      verified = latest.sha256.replace(/^0x/, "").toLowerCase() === sha256File.replace(/^0x/, "").toLowerCase();
+    }
+
     const asOfNY   = nyTimestamp(asOf);
     const tradeDay = nyTradingDay(asOf);
-    const payload = v.json?.payload || {};
     const accounts = payload.accounts || {};
     const acctKey  = Object.keys(accounts).find(k => k !== "All") || null;
     const acct     = acctKey ? accounts[acctKey] : {};
     const all      = accounts["All"] || {};
-    const base = v.json?.account_base_ccy || v.json?.meta?.currency || "USD";
     const polyscanAddr = `https://amoy.polygonscan.com/address/${import.meta.env.VITE_REGISTRY_ADDR}`;
 
     app.innerHTML = `
@@ -142,7 +159,6 @@ async function renderOverview() {
         <div style="flex:0 0 auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           <button id="tabOverview" ${activeTab==='overview'?'disabled':''}>Overview</button>
           <button id="tabPerf" ${activeTab==='performance'?'disabled':''}>Performance</button>
-          <a href="${v.url}" target="_blank">IPFS</a>
           <a href="${polyscanAddr}#transactions" target="_blank">Polygonscan</a>
           <button id="themeToggle" title="Toggle theme">${theme === 'dark' ? 'Light' : 'Dark'}</button>
         </div>
@@ -156,16 +172,16 @@ async function renderOverview() {
       <details style="margin-top:18px;">
         <summary>Tech verification details</summary>
         <div style="margin-top:10px;font-size:13px;color:var(--muted);">
-          <div><b>On-chain CID:</b> <code style="word-break:break-all;">${cid}</code></div>
           <div><b>On-chain ts:</b> ${tsOnChain}</div>
           <div style="margin-top:8px;"><b>Hashes</b></div>
           <ul>
-            <li><b>Expected (on-chain):</b> <code>${v.sha256_onchain ?? 'n/a'}</code></li>
-            <li><b>Computed file-bytes:</b> <code>${v.sha256_file}</code></li>
-            <li><b>Computed canonical (no sha256):</b> <code>${v.sha256_canonical}</code></li>
-            ${v.sha256_expected ? `<li><b>Expected (in-file):</b> <code>${v.sha256_expected}</code></li>` : ""}
-            <li><b>Mode:</b> ${v.mode || 'n/a'}</li>
+            <li><b>Expected (on-chain):</b> <code>${sha256File}</code></li>
+            <li><b>From database (SQLite API):</b> <code>${latest?.sha256 ?? 'n/a'}</code></li>
+            <li><b>Verification:</b> ${verified ? "✅ Match" : "❌ Mismatch"}</li>
           </ul>
+          <div style="margin-top:8px;">
+            <b>Data Source:</b> SQLite API (fast) + Chain (trust)
+          </div>
         </div>
       </details>
     `;
@@ -210,6 +226,7 @@ async function renderPerformance() {
         <span style="margin-left:auto;display:flex;gap:8px;align-items:center;">
           <button id="tabOverview" ${activeTab==='overview'?'disabled':''}>Overview</button>
           <button id="tabPerf" ${activeTab==='performance'?'disabled':''}>Performance</button>
+          <a href="https://amoy.polygonscan.com/address/${import.meta.env.VITE_REGISTRY_ADDR}" target="_blank">Polygonscan</a>
           <button id="themeToggle" title="Toggle theme">${theme === 'dark' ? 'Light' : 'Dark'}</button>
         </span>
       </div>
@@ -238,7 +255,7 @@ async function renderPerformance() {
       <details style="margin-top:12px;">
         <summary>Equity history (Net liquidation)</summary>
         <pre style="text-align:left;background:var(--card-bg);border:1px solid var(--card-border);border-radius:8px;padding:12px;overflow:auto;max-height:320px;">
-      ${JSON.stringify(eq.slice(-10), null, 2)}
+    ${JSON.stringify(eq.slice(-10), null, 2)}
         </pre>
       </details>
     `;
@@ -268,6 +285,11 @@ function wireHeaderEvents() {
     await renderPerformance();
   });
 }
+
+// --- TEMP TEST: Fetch snapshots from API ---
+fetchFromAPI().then(data => {
+  console.log("API snapshots:", data);
+});
 
 // ---------- BOOT ----------
 if (activeTab === 'overview') {
