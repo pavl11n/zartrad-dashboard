@@ -1,0 +1,33 @@
+{
+    "U21262439": {
+        "BuyingPower": "17013.72 USD",
+        "NetLiquidation": "4354.98 USD",
+        "TotalCashValue": "4253.43 USD"
+    },
+    "All": {
+        "UnrealizedPnL": "-455.57 BASE",
+        "RealizedPnL": "0.00 BASE"
+    },
+    "Positions": [
+        {
+            "Instrument": "META 08/08/25 710.0 PUT",
+            "Symbol": "META",
+            "SecType": "OPT",
+            "Position": 3,
+            "AvgPrice": 1.0571,
+            "LastPrice": 0.288,
+            "PctChange": "-72.72%",
+            "PnL_$": -230.61
+        },
+        {
+            "Instrument": "META 08/08/25 815.0 CALL",
+            "Symbol": "META",
+            "SecType": "OPT",
+            "Position": 1,
+            "AvgPrice": 2.3999,
+            "LastPrice": 0.15,
+            "PctChange": "-93.74%",
+            "PnL_$": -224.96
+        }
+    ]
+}
