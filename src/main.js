@@ -7,7 +7,11 @@ import { fetchAllSnapshots, buildEquitySeries, computePerformance } from "./hist
 import Chart from 'chart.js/auto';
 import 'chartjs-adapter-date-fns';
 
-
+async function fetchBenchmarks() {
+  const res = await fetch("http://127.0.0.1:8000/benchmarks");
+  if (!res.ok) throw new Error("Failed to fetch benchmarks");
+  return await res.json();
+}
 
 // ---------- THEME ----------
 const THEME_KEY = 'theme';
@@ -237,13 +241,24 @@ async function renderPerformance() {
           </div>`).join("")}
       </div>
 
-      <h2 style="margin:10px 0;">
-        Equity Curve <span style="font-size:13px;color:var(--muted);font-weight:400;">
-          (Last updated: ${eq.length ? eq[eq.length - 1].date : "n/a"})
-        </span>
-      </h2>
-      <div style="max-width: 800px; height: 300px;">
-        <canvas id="equityChart"></canvas>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:20px;">
+        <div>
+          <h2 style="margin:10px 0;">
+            Equity Curve <span style="font-size:13px;color:var(--muted);font-weight:400;">
+              (Last updated: ${eq.length ? eq[eq.length - 1].date : "n/a"})
+            </span>
+          </h2>
+          <div style="height: 300px;">
+            <canvas id="equityChart"></canvas>
+          </div>
+        </div>
+
+        <div>
+          <h2 style="margin:10px 0;">Growth of $1000 vs Benchmarks</h2>
+          <div style="height: 300px;">
+            <canvas id="benchChart"></canvas>
+          </div>
+        </div>
       </div>
     `;
 
@@ -285,6 +300,47 @@ async function renderPerformance() {
               displayFormats: { day: "yyyy-MM-dd" }
             },
             ticks: { autoSkip: true, maxTicksLimit: 6 }
+          },
+          y: { title: { display: false } }
+        }
+      }
+    });
+
+    // 3) Fetch benchmark data
+    const bench = await fetchBenchmarks();
+
+    // Convert into datasets for Chart.js
+    const datasets = [
+      { key: "Zartrad", color: "#4cafef" },
+      { key: "SPY",     color: "#4caf50" },
+      { key: "DBMF",    color: "#ff9800" },
+      { key: "TLT",     color: "#9c27b0" },
+    ].map(cfg => ({
+      label: cfg.key,
+      data: bench.map(b => ({ x: b.trade_day, y: b[cfg.key] })),
+      borderColor: cfg.color,
+      borderWidth: 2,
+      fill: false,
+      tension: 0.2,
+      pointRadius: 0,
+      pointHoverRadius: 4,
+      pointHoverBackgroundColor: cfg.color
+    }));
+
+    // Render the benchmark chart
+    const ctxBench = document.getElementById("benchChart").getContext("2d");
+    new Chart(ctxBench, {
+      type: "line",
+      data: { datasets },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: true } },
+        spanGaps: true,   // <-- connect lines even if a day is missing
+        scales: {
+          x: {
+            type: "time",
+            time: { unit: "day", tooltipFormat: "yyyy-MM-dd" },
+            ticks: { source: "data" }   // <-- only show trading days
           },
           y: { title: { display: false } }
         }
